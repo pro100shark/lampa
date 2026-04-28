@@ -1,43 +1,72 @@
 (function () {
-    console.log('!!! SKIPPER V6: ПРЯМОЕ УПРАВЛЕНИЕ ВИДЕО !!!');
+    console.log('!!! SKIPPER PRO: ЗАПУСК !!!');
 
-    setInterval(function() {
-        var is_open = typeof Lampa !== 'undefined' && Lampa.Player && Lampa.Player.opened;
+    var storageKey = 'lampa_skipper_data';
+
+    function getStorage() {
+        try { return JSON.parse(localStorage.getItem(storageKey) || '{}'); } 
+        catch (e) { return {}; }
+    }
+
+    function savePoint(type) {
+        var video = document.querySelector('.player-video__video');
+        if (!video) return;
+
+        var movie = Lampa.Player.data().movie;
+        var id = movie.id;
+        var db = getStorage();
         
-        if (is_open) {
-            var video_element = document.querySelector('.player-video__video');
-            var player_box = $('.player-video'); 
-            
-            if (video_element && player_box.length && !$('.skip-btn-final').length) {
-                console.log('!!! SKIPPER: Видео найдено, ставлю кнопку');
+        if (!db[id]) db[id] = {};
+        db[id][type] = Math.floor(video.currentTime);
+        
+        localStorage.setItem(storageKey, JSON.stringify(db));
+        Lampa.Noty.show('Сохранено для ' + (type === 'intro' ? 'начала' : 'финала'));
+    }
 
-                var btn = $('<div class="skip-btn-final" style="position:absolute; bottom:120px; right:30px; z-index:9999; background:rgba(255,193,7,0.9); color:#000; padding:12px 20px; border-radius:10px; cursor:pointer; font-weight:bold; box-shadow: 0 0 15px rgba(0,0,0,0.5); font-size:16px; border:2px solid #fff;">ПРОПУСТИТЬ 85с</div>');
-                
-                player_box.append(btn);
+    function doSkip(type) {
+        var movie = Lampa.Player.data().movie;
+        var saved = getStorage()[movie.id];
 
-                btn.on('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    
-                    try {
-                        // Прямое управление тегом <video>
-                        var v = document.querySelector('.player-video__video');
-                        if (v) {
-                            v.currentTime += 85;
-                            console.log('!!! SKIPPER: Прыжок выполнен успешно');
-                            if (typeof Lampa.Noty !== 'undefined') Lampa.Noty.show('Пропустили 85 секунд');
-                        } else {
-                            console.log('!!! SKIPPER: Видео не найдено в момент клика');
-                        }
-                    } catch (err) {
-                        console.error('!!! SKIPPER ERROR:', err);
-                    }
-                });
+        if (saved && saved[type]) {
+            var video = document.querySelector('.player-video__video');
+            if (video) {
+                video.currentTime = saved[type];
+                Lampa.Noty.show('Пропущено к метке');
             }
         } else {
-            if ($('.skip-btn-final').length) {
-                $('.skip-btn-final').remove();
-            }
+            Lampa.Noty.show('Сначала зажмите кнопку, чтобы сохранить время');
         }
-    }, 1000);
+    }
+
+    function createButtons() {
+        var player = $('.player-video');
+        if (player.length && !$('.skip-container').length) {
+            
+            var container = $('<div class="skip-container" style="position:absolute; bottom:130px; right:30px; z-index:9999; display:flex; gap:10px;"></div>');
+            
+            var btnStyle = 'background:rgba(0,0,0,0.7); color:#fff; padding:10px 15px; border-radius:8px; cursor:pointer; font-weight:bold; border:1px solid rgba(255,255,255,0.3); font-size:14px;';
+            
+            var btnIntro = $('<div style="' + btnStyle + '">В НАЧАЛО</div>');
+            var btnOutro = $('<div style="' + btnStyle + '">В КОНЕЦ</div>');
+
+            container.append(btnIntro).append(btnOutro);
+            player.append(container);
+
+            // Клик — прыжок
+            btnIntro.on('click', function() { doSkip('intro'); });
+            btnOutro.on('click', function() { doSkip('outro'); });
+
+            // Долгое нажатие — сохранение
+            var timer;
+            btnIntro.on('mousedown touchstart', function() {
+                timer = setTimeout(function() { savePoint('intro'); }, 1500);
+            }).on('mouseup mouseleave touchend', function() { clearTimeout(timer); });
+
+            btnOutro.on('mousedown touchstart', function() {
+                timer = setTimeout(function() { savePoint('outro'); }, 1500);
+            }).on('mouseup mouseleave touchend', function() { clearTimeout(timer); });
+        }
+    }
+
+    setInterval(createButtons, 1000);
 })();
