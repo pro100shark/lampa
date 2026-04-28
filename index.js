@@ -1,85 +1,70 @@
-"use strict";
+(function () {
+    'use strict';
 
-(() => {
-    class LampaSkipper {
-        constructor() {
-            this.storageKey = 'lampa_skipper_data';
+    function LampaSkipper() {
+        var storageKey = 'lampa_skipper_settings';
+
+        // 1. Поиск панели управления (перебираем все варианты твоей версии)
+        function getFooter() {
+            return $('.player-controls__footer, .player-video__footer, .player-interface__footer');
         }
 
-        getStorage() {
-            try {
-                return JSON.parse(localStorage.getItem(this.storageKey) || '{}');
-            } catch (e) {
-                return {};
-            }
-        }
-
-        init() {
-            // Слушаем события плеера
-            Lampa.Player.listener.follow('view', (e) => {
-                // Добавляем задержку, чтобы футер успел появиться в DOM
-                if (e.type === 'rentry' || e.type === 'ready' || e.type === 'init') {
-                    setTimeout(() => {
-                        this.renderButtons();
-                    }, 500);
-                }
-            });
-            console.log("Skipper: Инициализирован");
-        }
-
-        renderButtons() {
-            // Ищем футер плеера (в разных версиях может быть разным)
-            const footer = $('.player-video__footer, .player-controls__footer');
+        // 2. Логика отрисовки кнопок
+        this.render = function () {
+            var footer = getFooter();
             
-            if (footer.length && !$('.skip-btn--intro').length) {
-                console.log("Skipper: Футер найден, рисую кнопки");
+            if (footer.length && !$('.skip-intro-btn').length) {
+                console.log('Skipper: Drawing buttons...');
 
-                const btnStyle = "margin-left:12px; background: rgba(255,255,255,0.1); padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; z-index: 10; pointer-events: all; border: 1px solid rgba(255,255,255,0.2);";
+                var btnStyle = 'margin-left: 10px; background: rgba(255,255,255,0.15); padding: 5px 12px; border-radius: 4px; cursor: pointer; border: 1px solid rgba(255,255,255,0.2); font-size: 13px; font-weight: bold;';
+                
+                var btnIntro = $('<div class="player-video__button skip-intro-btn" style="' + btnStyle + '">ПРОПУСТИТЬ</div>');
+                
+                // Вставляем кнопку перед иконкой настроек
+                footer.find('.player-video__button:last').before(btnIntro);
 
-                const btnIntro = $(`<div class="player-video__button skip-btn--intro" style="${btnStyle}">Пропустить начало</div>`);
-                const btnOutro = $(`<div class="player-video__button skip-btn--outro" style="${btnStyle}">Титры</div>`);
+                // Клик или OK на пульте
+                btnIntro.on('click', function () {
+                    var video = Lampa.Player.video();
+                    var data = Lampa.Player.data();
+                    var saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
+                    
+                    if (saved[data.movie.id]) {
+                        video.currentTime = saved[data.movie.id];
+                        Lampa.Noty.show('Пропущено по твоей метке');
+                    } else {
+                        Lampa.Noty.show('Сначала зажми для сохранения');
+                    }
+                });
 
-                footer.append(btnIntro).append(btnOutro);
-
-                btnIntro.on('hover:enter click', () => this.handleSkip('intro'));
-                btnIntro.on('hover:long', () => this.handleSave('intro'));
-
-                btnOutro.on('hover:enter click', () => this.handleSkip('outro'));
-                btnOutro.on('hover:long', () => this.handleSave('outro'));
-            } else {
-                console.log("Skipper: Футер не найден или кнопки уже есть");
+                // Долгое нажатие (Save)
+                btnIntro.on('hover:long', function () {
+                    var data = Lampa.Player.data();
+                    var time = Math.floor(Lampa.Player.video().currentTime);
+                    var saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
+                    
+                    saved[data.movie.id] = time;
+                    localStorage.setItem(storageKey, JSON.stringify(saved));
+                    Lampa.Noty.show('Время заставки сохранено!');
+                });
             }
-        }
+        };
 
-        handleSkip(type) {
-            const data = Lampa.Player.data();
-            const id = data.movie.id;
-            const savedPoints = this.getStorage()[id];
-
-            if (savedPoints?.[type]) {
-                Lampa.Player.video().currentTime = savedPoints[type];
-                Lampa.Noty.show('Прыжок выполнен');
-            } else {
-                Lampa.Noty.show('Зажмите для сохранения');
-            }
-        }
-
-        handleSave(type) {
-            const id = Lampa.Player.data().movie.id;
-            const currentTime = Math.floor(Lampa.Player.video().currentTime);
-            const db = this.getStorage();
-
-            if (!db[id]) db[id] = {};
-            db[id][type] = currentTime;
-
-            localStorage.setItem(this.storageKey, JSON.stringify(db));
-            Lampa.Noty.show('Время сохранено!');
-        }
+        // Инициализация
+        this.init = function () {
+            var _this = this;
+            // Каждую секунду проверяем, не открылся ли плеер
+            setInterval(function() {
+                _this.render();
+            }, 1000);
+            console.log('Skipper: Ready');
+        };
     }
 
+    // Запуск
     if (!window.lampa_skipper_loaded) {
         window.lampa_skipper_loaded = true;
-        const skipper = new LampaSkipper();
+        var skipper = new LampaSkipper();
         skipper.init();
     }
 })();
