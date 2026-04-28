@@ -1,28 +1,29 @@
 (function () {
-    // Этот лог МЫ ДОЛЖНЫ увидеть в консоли первым делом
-    console.log('!!! SKIPPER LOADED !!!');
+    console.log('Skipper: Запуск проверки...');
 
-    function createSkipButtons() {
-        // Проверяем все возможные контейнеры для твоей версии
-        var footer = $('.player-controls__footer, .player-video__footer, .player-interface__footer, .player-panel__footer');
+    function addButtons() {
+        // Проверяем наличие футера плеера
+        var footer = $('.player-video__footer, .player-controls__footer');
         
-        if (footer.length > 0 && !$('.lampa-skip-btn').length) {
-            console.log('!!! SKIPPER: FOUND FOOTER, ADDING BUTTON !!!');
+        if (footer.length && !$('.skip-btn-new').length) {
+            console.log('Skipper: Рисую кнопки');
             
-            var btn = $('<div class="lampa-skip-btn" style="display:inline-block; margin-left:20px; background:#fff; color:#000; padding:10px; cursor:pointer; font-weight:bold; border-radius:5px; z-index:999;">ПРОПУСТИТЬ</div>');
+            var style = 'margin-left:10px; background:rgba(255,255,255,0.2); padding:6px 12px; border-radius:4px; cursor:pointer; display:inline-block; font-size:12px; color:#fff; border:1px solid rgba(255,255,255,0.3);';
+            
+            var btn = $('<div class="skip-btn-new" style="' + style + '">ПРОПУСТИТЬ</div>');
             
             footer.append(btn);
 
             btn.on('click', function() {
                 var v = Lampa.Player.video();
                 if (v) {
-                    v.currentTime += 85; // Просто прыгаем на 85 сек для теста
-                    Lampa.Noty.show('Прыжок на 85 секунд');
+                    v.currentTime += 85; 
+                    Lampa.Noty.show('Пропустили 85 сек');
                 }
             });
         }
     }
 
-    // Запускаем проверку каждые 500мс
-    setInterval(createSkipButtons, 500);
+    // Проверяем каждую секунду, открыт ли плеер
+    setInterval(addButtons, 1000);
 })();
