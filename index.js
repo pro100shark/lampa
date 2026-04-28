@@ -1,32 +1,41 @@
 (function () {
-    console.log('!!! SKIPPER V3: ФИНАЛЬНЫЙ БРОСОК !!!');
+    console.log('!!! SKIPPER V4: ПРИВЯЗКА К ТЕГУ VIDEO !!!');
 
     setInterval(function() {
-        // Проверяем статус плеера через API Lampa
+        // Проверяем, открыт ли плеер в Lampa
         var is_open = typeof Lampa !== 'undefined' && Lampa.Player && Lampa.Player.opened;
         
         if (is_open) {
-            if (!$('.skip-btn-final').length) {
-                console.log('!!! SKIPPER: Вижу плеер, создаю плавающую кнопку');
-                
-                // Создаем кнопку с фиксированным позиционированием
-                var btn = $('<div class="skip-btn-final" style="position:fixed; bottom:20%; right:5%; z-index:999999; background:#ffc107; color:#000; padding:15px 25px; border-radius:50px; cursor:pointer; font-weight:bold; box-shadow: 0 0 20px rgba(0,0,0,1); font-size:18px; border:3px solid #fff; font-family: sans-serif; text-align:center;">ПРОПУСТИТЬ 85с</div>');
-                
-                $('body').append(btn);
+            // Находим именно тот тег, который ты скинул
+            var video_tag = $('.player-video__video');
+            var container = video_tag.parent();
 
-                // Обработка клика
+            if (container.length && !$('.skip-btn-final').length) {
+                console.log('!!! SKIPPER: Контейнер найден, монтирую кнопку');
+                
+                // Убеждаемся, что контейнер имеет позиционирование для работы absolute
+                if (container.css('position') === 'static') {
+                    container.css('position', 'relative');
+                }
+
+                // Создаем кнопку. Теперь она внутри плеера.
+                // bottom: 15% и right: 5% — чтобы не перекрывала основные элементы управления
+                var btn = $('<div class="skip-btn-final" style="position:absolute; bottom:15%; right:5%; z-index:999; background:rgba(0,0,0,0.6); color:#fff; padding:10px 20px; border-radius:8px; cursor:pointer; font-weight:bold; border:1px solid rgba(255,255,255,0.4); font-size:16px; white-space:nowrap;">ПРОПУСТИТЬ 85с</div>');
+                
+                container.append(btn);
+
                 btn.on('click', function(e) {
                     e.preventDefault();
                     e.stopPropagation();
-                    var video = Lampa.Player.video();
-                    if (video) {
-                        video.currentTime += 85;
-                        Lampa.Noty.show('Прыжок на 85 секунд');
+                    var v = Lampa.Player.video();
+                    if (v) {
+                        v.currentTime += 85;
+                        Lampa.Noty.show('Пропустили заставку');
                     }
                 });
             }
         } else {
-            // Если плеер закрыт — удаляем кнопку из документа
+            // Если плеер закрыт, удаляем кнопку, если она вдруг осталась
             if ($('.skip-btn-final').length) {
                 $('.skip-btn-final').remove();
             }
