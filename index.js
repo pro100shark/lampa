@@ -1,62 +1,100 @@
-(function () {
-    function AdvancedSkipPlugin() {
-        var storage_key = 'lampa_advanced_skip';
-        
-        var getStorage = function() {
-            try { return JSON.parse(localStorage.getItem(storage_key) || '{}'); } 
-            catch(e) { return {}; }
-        };
+"use strict";
 
-        this.create = function () {
+(() => {
+    class LampaSkipper {
+        constructor() {
+            this.storageKey = 'lampa_skipper_data';
+        }
+
+        /**
+         * Получаем сохраненные метки из localStorage
+         */
+        getStorage() {
+            try {
+                return JSON.parse(localStorage.getItem(this.storageKey) || '{}');
+            } catch (e) {
+                console.error('Skipper: Ошибка чтения базы данных', e);
+                return {};
+            }
+        }
+
+        /**
+         * Инициализация слушателей плеера Lampa
+         */
+        init() {
             Lampa.Player.listener.follow('view', (e) => {
-                if (e.type == 'rentry' || e.type == 'ready') this.addButton();
+                if (e.type === 'rentry' || e.type === 'ready') {
+                    this.renderButtons();
+                }
             });
-        };
+        }
 
-        this.addButton = function () {
-            var footer = $('.player-video__footer');
-            if (footer.length && !$('.skip-intro-btn').length) {
-                var btnIntro = $('<div class="player-video__button skip-intro-btn" style="margin-left:10px; background: rgba(50, 200, 50, 0.3); padding: 5px 12px; border-radius: 5px;">Пропуск заставки</div>');
-                var btnOutro = $('<div class="player-video__button skip-outro-btn" style="margin-left:10px; background: rgba(200, 50, 50, 0.3); padding: 5px 12px; border-radius: 5px;">К титрам</div>');
-                
-                footer.append(btnIntro).append(btnOutro);
+        /**
+         * Отрисовка интерфейса кнопок
+         */
+        renderButtons() {
+            const footer = $('.player-video__footer');
+            
+            // Если кнопки уже есть — ничего не делаем
+            if (!footer.length || $('.skip-btn--intro').length) return;
 
-                // Логика для заставки (Intro)
-                btnIntro.on('hover:enter', () => this.skipTo('intro'));
-                btnIntro.on('hover:long', () => this.saveTime('intro'));
+            const createBtn = (type, label, color) => {
+                return $(`<div class="player-video__button skip-btn--${type}" 
+                    style="margin-left:12px; background: ${color}; padding: 6px 14px; border-radius: 6px; font-weight: bold; cursor: pointer;">
+                    ${label}
+                </div>`);
+            };
 
-                // Логика для финальных титров (Outro)
-                btnOutro.on('hover:enter', () => this.skipTo('outro'));
-                btnOutro.on('hover:long', () => this.saveTime('outro'));
-            }
-        };
+            const btnIntro = createBtn('intro', 'Пропустить начало', 'rgba(46, 204, 113, 0.4)');
+            const btnOutro = createBtn('outro', 'В конец серии', 'rgba(231, 76, 60, 0.4)');
 
-        this.skipTo = function (type) {
-            var id = Lampa.Player.data().movie.id;
-            var saved = getStorage()[id];
-            if (saved && saved[type]) {
-                Lampa.Player.video().currentTime = saved[type];
-                Lampa.Noty.show('Прыжок: ' + (type == 'intro' ? 'Заставка' : 'Титры'));
+            footer.append(btnIntro).append(btnOutro);
+
+            // Обработка клика (короткое нажатие OK)
+            btnIntro.on('hover:enter', () => this.handleSkip('intro'));
+            btnOutro.on('hover:enter', () => this.handleSkip('outro'));
+
+            // Обработка долгого нажатия (Long Press) для сохранения точки
+            btnIntro.on('hover:long', () => this.handleSave('intro'));
+            btnOutro.on('hover:long', () => this.handleSave('outro'));
+        }
+
+        /**
+         * Прыжок на сохраненную точку
+         */
+        handleSkip(type) {
+            const movieData = Lampa.Player.data();
+            const id = movieData.movie.id;
+            const savedPoints = this.getStorage()[id];
+
+            if (savedPoints?.[type]) {
+                Lampa.Player.video().currentTime = savedPoints[type];
+                Lampa.Noty.show(`Прыжок: ${type === 'intro' ? 'Начало' : 'Финал'}`);
             } else {
-                Lampa.Noty.show('Удерживайте OK, чтобы запомнить время');
+                Lampa.Noty.show('Зажмите OK, чтобы запомнить время');
             }
-        };
+        }
 
-        this.saveTime = function (type) {
-            var id = Lampa.Player.data().movie.id;
-            var currentTime = Math.floor(Lampa.Player.video().currentTime);
-            var db = getStorage();
-            
-            if (!db[id]) db[id] = {};
-            db[id][type] = currentTime;
-            
-            localStorage.setItem(storage_key, JSON.stringify(db));
-            Lampa.Noty.show('Сохранено для ' + (type == 'intro' ? 'заставки' : 'титров'));
-        };
+        /**
+         * Сохранение текущей секунды в базу
+         */
+        handleSave(type) {
+            const { movie } = Lampa.Player.data();
+            const currentTime = Math.floor(Lampa.Player.video().currentTime);
+            const db = this.getStorage();
+
+            if (!db[movie.id]) db[movie.id] = {};
+            db[movie.id][type] = currentTime;
+
+            localStorage.setItem(this.storageKey, JSON.stringify(db));
+            Lampa.Noty.show(`Время для ${type === 'intro' ? 'заставки' : 'титров'} сохранено!`);
+        }
     }
 
-    if (!window.advanced_skip_installed) {
-        window.advanced_skip_installed = true;
-        new AdvancedSkipPlugin().create();
+    // Запуск плагина (проверка на дубликаты)
+    if (!window.lampa_skipper_loaded) {
+        window.lampa_skipper_loaded = true;
+        const skipper = new LampaSkipper();
+        skipper.init();
     }
 })();
