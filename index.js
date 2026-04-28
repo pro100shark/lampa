@@ -1,86 +1,98 @@
 (function () {
-    console.log('!!! SKIPPER V8: ФИКС ОБЪЕКТА DATA !!!');
+    console.log('!!! SKIPPER V11: АДАПТИВНОЕ ПОЯВЛЕНИЕ !!!');
 
-    var storageKey = 'lampa_skipper_v8_data';
+    var storageKey = 'lampa_skipper_v11_data';
+    var isShownForThisSession = false;
+    var lastMovieId = '';
 
     function getMovieId() {
         try {
-            // В твоей версии это объект, а не функция
-            var p = Lampa.Player;
-            var d = (p.data && typeof p.data === 'object') ? p.data : p.opened_data;
-            
-            if (d && d.movie) {
-                return d.movie.id || d.movie.title || 'unknown';
-            }
-            return 'unknown';
-        } catch (e) {
-            console.log('!!! SKIPPER: Ошибка поиска ID', e);
-            return 'unknown';
-        }
+            var p = Lampa.Player, d = (p.data && typeof p.data === 'object') ? p.data : p.opened_data;
+            return (d && d.movie) ? (d.movie.id || d.movie.title || 'unknown') : 'unknown';
+        } catch (e) { return 'unknown'; }
     }
 
-    function getStorage() {
-        try { return JSON.parse(localStorage.getItem(storageKey) || '{}'); } 
-        catch (e) { return {}; }
-    }
-
-    function savePoint(type) {
+    function saveIntro() {
         var video = document.querySelector('.player-video__video');
         if (!video) return;
-
         var id = getMovieId();
-        var db = getStorage();
-        
+        var db = JSON.parse(localStorage.getItem(storageKey) || '{}');
         if (!db[id]) db[id] = {};
-        db[id][type] = Math.floor(video.currentTime);
-        
+        db[id].intro = Math.floor(video.currentTime);
         localStorage.setItem(storageKey, JSON.stringify(db));
-        
-        if (window.Lampa && Lampa.Noty) {
-            Lampa.Noty.show('Метка ' + (type === 'intro' ? 'начала' : 'финала') + ' сохранена');
-        }
+        Lampa.Noty.show('Точка пропуска сохранена');
     }
 
-    function doSkip(type) {
+    function skipIntro() {
         var id = getMovieId();
-        var saved = getStorage()[id];
-
-        if (saved && saved[type]) {
-            var video = document.querySelector('.player-video__video');
-            if (video) {
-                video.currentTime = saved[type];
-                if (window.Lampa && Lampa.Noty) Lampa.Noty.show('Пропустили к метке');
-            }
-        } else {
-            if (window.Lampa && Lampa.Noty) Lampa.Noty.show('Зажмите кнопку, чтобы запомнить время');
+        var saved = JSON.parse(localStorage.getItem(storageKey) || '{}')[id];
+        var video = document.querySelector('.player-video__video');
+        if (video && saved && saved.intro) {
+            video.currentTime = saved.intro;
+            Lampa.Noty.show('Пропущено');
+            $('.skip-btn-v11').fadeOut(300);
         }
     }
 
-    function createButtons() {
+    function monitor() {
+        var video = document.querySelector('.player-video__video');
         var player = $('.player-video');
-        if (player.length && !$('.skip-container-v8').length) {
-            
-            var container = $('<div class="skip-container-v8" style="position:absolute; bottom:140px; right:30px; z-index:9999; display:flex; gap:10px;"></div>');
-            var style = 'background:rgba(0,0,0,0.8); color:#ffc107; padding:12px 18px; border-radius:10px; cursor:pointer; font-weight:bold; border:2px solid #ffc107; font-size:14px;';
-            
-            var bIn = $('<div class="s-btn" style="' + style + '">В НАЧАЛО</div>');
-            var bOut = $('<div class="s-btn" style="' + style + '">В КОНЕЦ</div>');
+        if (!video || !player.length) {
+            isShownForThisSession = false;
+            lastMovieId = '';
+            $('.skip-btn-v11').remove();
+            return;
+        }
 
-            container.append(bIn).append(bOut);
-            player.append(container);
+        var currentId = getMovieId();
+        if (lastMovieId !== currentId) {
+            lastMovieId = currentId;
+            isShownForThisSession = false;
+        }
 
-            bIn.on('click', function(e) { e.stopPropagation(); doSkip('intro'); });
-            bOut.on('click', function(e) { e.stopPropagation(); doSkip('outro'); });
+        var db = JSON.parse(localStorage.getItem(storageKey) || '{}');
+        var savedTime = (db[currentId] && db[currentId].intro) ? db[currentId].intro : null;
+        var currentTime = Math.floor(video.currentTime);
+
+        // ЛОГИКА ПОЯВЛЕНИЯ:
+        // 1. Если метки нет — показываем в первые 20 сек видео, чтобы человек мог её создать.
+        // 2. Если метка есть — показываем за 10 сек до этой метки и убираем через 5 сек после.
+        var shouldShow = false;
+        if (!savedTime) {
+            if (currentTime < 20) shouldShow = true;
+        } else {
+            if (currentTime >= (savedTime - 10) && currentTime <= (savedTime + 2)) {
+                shouldShow = true;
+            }
+        }
+
+        if (shouldShow && !$('.skip-btn-v11').length && !isShownForThisSession) {
+            var btn = $('<div class="skip-btn-v11" style="position:absolute; bottom:140px; right:30px; z-index:9999; background:rgba(0,0,0,0.85); color:#ffc107; padding:12px 20px; border-radius:10px; cursor:pointer; font-weight:bold; border:2px solid #ffc107; font-size:16px; box-shadow:0 0 15px rgba(0,0,0,0.5);">ПРОПУСТИТЬ ИНТРО</div>');
+            player.append(btn);
+
+            btn.on('click', function(e) {
+                e.stopPropagation();
+                skipIntro();
+                isShownForThisSession = true; // Больше не показываем в этой серии
+            });
 
             var timer;
-            $('.s-btn').on('mousedown touchstart', function() {
-                var t = $(this).text().includes('НАЧАЛО') ? 'intro' : 'outro';
-                timer = setTimeout(function() { savePoint(t); timer = null; }, 1500);
+            btn.on('mousedown touchstart', function() {
+                timer = setTimeout(saveIntro, 1500);
             }).on('mouseup mouseleave touchend', function() {
-                if (timer) clearTimeout(timer);
+                clearTimeout(timer);
+            });
+        }
+
+        // Авто-удаление, если время вышло
+        if (!shouldShow && $('.skip-btn-v11').length) {
+            $('.skip-btn-v11').fadeOut(500, function() { 
+                $(this).remove();
+                // Если мы прошли точку сохраненного интро, помечаем сессию как "показанную"
+                if (savedTime && currentTime > savedTime) isShownForThisSession = true;
             });
         }
     }
 
-    setInterval(createButtons, 1000);
+    setInterval(monitor, 1000);
 })();
